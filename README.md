@@ -1,90 +1,42 @@
+# Keep It Booked
 
-# 📚 My Books Diary
+Book tracker frontend built with Next.js Pages Router (JavaScript), MUI, Supabase, React Query, React Hook Form, and Zod.
 
-A personal web app for book lovers to keep track of the books they've read and store all their reading notes in one place.  
-Built with **Node.js**, **Express**, and **PostgreSQL**.
+## Environment variables
 
----
+Use your existing keys (already provided):
 
-## ✨ Features
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_PUBLISHABLE_KEY`
+- `VITE_CALLBACK_URL`
+- `VITE_OPEN_LIBRARY_URL` (optional)
 
-- **User Accounts**
-  - Sign up for your own account
-  - Secure login with session management
+Compatibility is implemented so client code checks `NEXT_PUBLIC_*` first and then falls back to the `VITE_*` names.
 
-- **Book Management**
-  - Add books with details (title, author, etc.)
-  - View your personal book list
-
-- **Notes**
-  - Create notes for each book
-  - View all notes anytime
-  - *(Coming soon)* Edit notes
-
----
-
-## 🛠 Tech Stack
-
-- **Backend:** Node.js, Express  
-- **Database:** PostgreSQL  
-- **Session Handling:** `express-session`, `body-parser`  
-
----
-
-## 🚀 Getting Started
-
-### 1️⃣ Clone the repository
-```bash
-git clone https://github.com/Krypton-46/Books-Journal.git
-cd my-books-diary
-````
-
-### 2️⃣ Install dependencies
+## Scripts
 
 ```bash
-npm install
+npm run dev
+npm run build
+npm run start
+npm run lint
 ```
 
-### 3️⃣ Configure environment variables
+## Routes
 
-Create a `.env` file in the root directory and add:
+- `/` redirects to `/auth/callback` when OAuth params are present, otherwise to `/dashboard`
+- `/login`
+- `/signup`
+- `/auth/callback`
+- `/what-is-isbn`
+- `/dashboard` (protected)
+- `/add` (protected)
+- `/edit/[id]` (protected)
+- `/book/[id]` (protected)
 
-```
-DB_HOST=your_database_host
-DB_PORT=your_database_port
-DB_USER=your_database_user
-DB_PASSWORD=your_database_password
-DB_NAME=your_database_name
-SESSION_SECRET=your_secret_key
-```
+## Notes
 
-### 4️⃣ Run the app
-
-```bash
-npm start
-```
-
-The app will be available at **[http://localhost:3000](http://localhost:3000)**.
-
----
-
-## 📌 Roadmap
-
-* [ ] Deploy the app (currently seeking suggestions)
-* [ ] Edit notes feature
-* [ ] Improve UI/UX
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome!
-Feel free to fork the repository and submit a pull request.
-
----
-
-## 📜 License
-
-This project is licensed under the [MIT License](LICENSE).
-
-
+- Google auth uses Supabase PKCE OAuth redirect flow.
+- Protected routes wait for auth initialization and then redirect to `/login` if unauthenticated.
+- Cover URLs are generated with `IMG_URL + "/" + isbn + "-M.jpg"`.
