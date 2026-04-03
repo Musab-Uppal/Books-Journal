@@ -19,6 +19,11 @@ import { bookSchema } from "@/lib/schemas";
 
 const RATINGS = [1, 2, 3, 4, 5];
 
+function extractIsbn13(raw) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  return /^\d{13}$/.test(digits) ? digits : "";
+}
+
 export function BookForm({
   title,
   subtitle,
@@ -85,7 +90,7 @@ export function BookForm({
       params.set("limit", "1");
 
       const response = await fetch(
-        `/api/open-library-search?${params.toString()}`,
+        `/api/groq-isbn-search?${params.toString()}`,
       );
       const payload = await response.json();
 
@@ -99,7 +104,14 @@ export function BookForm({
       }
 
       const bestMatch = payload.results[0];
-      applyLookupResult(bestMatch);
+      const isbn13 = extractIsbn13(bestMatch?.isbn);
+
+      if (!isbn13) {
+        setLookupError("Groq did not return a valid 13-digit ISBN");
+        return;
+      }
+
+      applyLookupResult(bestMatch, isbn13);
       setLookupNotice("Best match auto-filled into the ISBN box.");
     } catch (error) {
       setLookupError(error?.message || "Could not search right now");
@@ -108,12 +120,12 @@ export function BookForm({
     }
   }
 
-  function applyLookupResult(result) {
+  function applyLookupResult(result, isbn13) {
     setValue("title", result.title, {
       shouldDirty: true,
       shouldValidate: true,
     });
-    setValue("isbn", result.isbn, { shouldDirty: true, shouldValidate: true });
+    setValue("isbn", isbn13, { shouldDirty: true, shouldValidate: true });
     setLookupError("");
   }
 
@@ -146,8 +158,8 @@ export function BookForm({
           <Grid size={{ xs: 12 }}>
             <Stack spacing={1}>
               <Typography variant="body2" color="text.secondary">
-                Quick ISBN lookup: provide title and author to auto-fill the
-                best match.
+                AI ISBN lookup: provide title and author to auto-fill the best
+                match.
               </Typography>
               <Grid container spacing={1}>
                 <Grid size={{ xs: 12, sm: 8 }}>
@@ -194,7 +206,9 @@ export function BookForm({
               placeholder="Optional (auto-fill with Find ISBN)"
               {...register("isbn")}
               error={Boolean(errors.isbn)}
-              helperText={errors.isbn?.message || "10 or 13 digits"}
+              helperText={
+                errors.isbn?.message || "Expecting 13-digit ISBN from Groq"
+              }
             />
             <Link href="/what-is-isbn" underline="hover" sx={{ fontSize: 13 }}>
               What is ISBN?
