@@ -55,7 +55,6 @@ export function BookForm({
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState("");
   const [lookupNotice, setLookupNotice] = useState("");
-  const [lookupResults, setLookupResults] = useState([]);
   const titleValue = watch("title");
 
   useEffect(() => {
@@ -74,7 +73,6 @@ export function BookForm({
     setLookupLoading(true);
     setLookupError("");
     setLookupNotice("");
-    setLookupResults([]);
 
     try {
       const params = new URLSearchParams();
@@ -84,7 +82,7 @@ export function BookForm({
       if (authorQuery) {
         params.set("author", authorQuery);
       }
-      params.set("limit", "6");
+      params.set("limit", "1");
 
       const response = await fetch(
         `/api/open-library-search?${params.toString()}`,
@@ -100,11 +98,9 @@ export function BookForm({
         return;
       }
 
-      setLookupResults(payload.results);
-      applyLookupResult(payload.results[0]);
-      setLookupNotice(
-        "Best match auto-filled. You can choose a different result below.",
-      );
+      const bestMatch = payload.results[0];
+      applyLookupResult(bestMatch);
+      setLookupNotice("Best match auto-filled into the ISBN box.");
     } catch (error) {
       setLookupError(error?.message || "Could not search right now");
     } finally {
@@ -150,7 +146,8 @@ export function BookForm({
           <Grid size={{ xs: 12 }}>
             <Stack spacing={1}>
               <Typography variant="body2" color="text.secondary">
-                Quick ISBN lookup: provide title and author, then pick a match.
+                Quick ISBN lookup: provide title and author to auto-fill the
+                best match.
               </Typography>
               <Grid container spacing={1}>
                 <Grid size={{ xs: 12, sm: 8 }}>
@@ -185,40 +182,6 @@ export function BookForm({
                 <Alert severity="info" sx={{ py: 0 }}>
                   {lookupNotice}
                 </Alert>
-              ) : null}
-              {lookupResults.length ? (
-                <Stack spacing={0.8}>
-                  {lookupResults.map((result) => (
-                    <Box
-                      key={result.id}
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 1,
-                        border: "1px solid rgba(255,255,255,0.14)",
-                        borderRadius: 1.5,
-                        px: 1,
-                        py: 0.8,
-                      }}
-                    >
-                      <Typography variant="body2" sx={{ lineHeight: 1.3 }}>
-                        {result.title} by {result.author}
-                        {result.year ? ` (${result.year})` : ""} - ISBN{" "}
-                        {result.isbn}
-                      </Typography>
-                      <Button
-                        type="button"
-                        size="small"
-                        color="warning"
-                        variant="contained"
-                        onClick={() => applyLookupResult(result)}
-                      >
-                        Use
-                      </Button>
-                    </Box>
-                  ))}
-                </Stack>
               ) : null}
             </Stack>
           </Grid>

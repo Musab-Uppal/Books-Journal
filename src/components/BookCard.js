@@ -31,8 +31,9 @@ export function BookCard({ book }) {
           sx={{
             position: "relative",
             width: "100%",
-            height: 150,
+            height: 170,
             borderBottom: "1px solid rgba(255,255,255,0.12)",
+            bgcolor: "rgba(0,0,0,0.28)",
           }}
         >
           <Image
@@ -40,7 +41,7 @@ export function BookCard({ book }) {
             alt={book.title}
             fill
             sizes="(max-width: 768px) 50vw, 25vw"
-            style={{ objectFit: "cover" }}
+            style={{ objectFit: "contain", padding: 8 }}
             unoptimized
           />
         </Box>

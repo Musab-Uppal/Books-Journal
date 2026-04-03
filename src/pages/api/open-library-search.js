@@ -32,6 +32,142 @@ function tokenOverlapScore(a, b) {
   return overlap / Math.max(tokensA.size, tokensB.size);
 }
 
+const NON_ORIGINAL_TITLE_MARKERS = [
+  "sparknotes",
+  "cliffsnotes",
+  "study guide",
+  "study guides",
+  "teacher guide",
+  "teachers guide",
+  "analysis",
+  "summary",
+  "summaries",
+  "workbook",
+  "graphic novel",
+  "illustrated",
+  "adaptation",
+  "adapted",
+  "retold",
+  "abridged",
+  "comic",
+  "manga",
+  "bookrags",
+  "lesson plan",
+  "test prep",
+  "exam prep",
+  "quick study",
+  "companion guide",
+  "lit chart",
+  "litcharts",
+  "maxnotes",
+  "supersummary",
+  "omnibus",
+  "collection",
+  "boxed set",
+  "complete novels",
+];
+
+function hasNonOriginalMarker(title) {
+  const titleNorm = normalizeText(title);
+  return NON_ORIGINAL_TITLE_MARKERS.some((marker) =>
+    titleNorm.includes(normalizeText(marker)),
+  );
+}
+
+function countExtraTitleTokens(titleNorm, docTitleNorm) {
+  const queryTokens = new Set(titleNorm.split(" ").filter(Boolean));
+  const docTokens = [...new Set(docTitleNorm.split(" ").filter(Boolean))];
+
+  let extra = 0;
+  for (const token of docTokens) {
+    if (!queryTokens.has(token)) {
+      extra += 1;
+    }
+  }
+
+  return extra;
+}
+
+function hasStrongAuthorMatch(doc, authorNorm) {
+  if (!authorNorm) {
+    return true;
+  }
+
+  const docAuthor = Array.isArray(doc?.author_name)
+    ? doc.author_name.join(" ")
+    : "";
+  const docAuthorNorm = normalizeText(docAuthor);
+
+  if (!docAuthorNorm) {
+    return false;
+  }
+
+  if (docAuthorNorm === authorNorm) {
+    return true;
+  }
+
+  if (
+    docAuthorNorm.includes(authorNorm) ||
+    authorNorm.includes(docAuthorNorm)
+  ) {
+    return true;
+  }
+
+  return tokenOverlapScore(authorNorm, docAuthorNorm) >= 0.45;
+}
+
+function hasStrongTitleMatch(doc, titleNorm) {
+  if (!titleNorm) {
+    return true;
+  }
+
+  const docTitleNorm = normalizeText(doc?.title || "");
+  if (!docTitleNorm) {
+    return false;
+  }
+
+  if (docTitleNorm === titleNorm) {
+    return true;
+  }
+
+  const overlap = tokenOverlapScore(titleNorm, docTitleNorm);
+  const extraTitleTokens = countExtraTitleTokens(titleNorm, docTitleNorm);
+
+  if (overlap >= 0.6) {
+    return true;
+  }
+
+  if (docTitleNorm.startsWith(titleNorm) && extraTitleTokens <= 4) {
+    return true;
+  }
+
+  return titleNorm.includes(docTitleNorm) && overlap >= 0.5;
+}
+
+function dedupeCandidateDocs(docs) {
+  const seen = new Set();
+  const uniqueDocs = [];
+
+  for (const doc of docs) {
+    const key = String(doc?.key || "");
+    const title = normalizeText(doc?.title || "");
+    const author = normalizeText(
+      Array.isArray(doc?.author_name) ? doc.author_name[0] || "" : "",
+    );
+    const year = String(doc?.first_publish_year || "");
+    const identity = key || `${title}|${author}|${year}`;
+
+    if (!identity || seen.has(identity)) {
+      continue;
+    }
+
+    seen.add(identity);
+    uniqueDocs.push(doc);
+  }
+
+  return uniqueDocs;
+}
+
 function scoreDoc(doc, title, author) {
   const docTitle = String(doc?.title || "");
   const docAuthor = Array.isArray(doc?.author_name)
@@ -46,23 +182,57 @@ function scoreDoc(doc, title, author) {
   let score = 0;
 
   if (titleNorm) {
+    const titleOverlap = tokenOverlapScore(titleNorm, docTitleNorm);
+    const extraTitleTokens = countExtraTitleTokens(titleNorm, docTitleNorm);
+
     if (docTitleNorm === titleNorm) {
-      score += 10;
+      score += 24;
     }
-    if (docTitleNorm.includes(titleNorm) || titleNorm.includes(docTitleNorm)) {
+    if (docTitleNorm.startsWith(titleNorm)) {
       score += 6;
     }
-    score += tokenOverlapScore(titleNorm, docTitleNorm) * 5;
+    if (docTitleNorm.includes(titleNorm) || titleNorm.includes(docTitleNorm)) {
+      score += 4;
+    }
+    score += titleOverlap * 12;
+
+    if (titleOverlap < 0.35) {
+      score -= 12;
+    }
+
+    const extraTitleLength = Math.max(
+      docTitleNorm.length - titleNorm.length,
+      0,
+    );
+    score -= Math.min(extraTitleLength / 12, 4);
+    score -= extraTitleTokens * 1.8;
+
+    if (extraTitleTokens >= 5) {
+      score -= 8;
+    }
   }
 
   if (authorNorm) {
+    const authorOverlap = tokenOverlapScore(authorNorm, docAuthorNorm);
+
+    if (docAuthorNorm === authorNorm) {
+      score += 14;
+    }
     if (
       docAuthorNorm.includes(authorNorm) ||
       authorNorm.includes(docAuthorNorm)
     ) {
-      score += 4;
+      score += 8;
     }
-    score += tokenOverlapScore(authorNorm, docAuthorNorm) * 4;
+    score += authorOverlap * 10;
+
+    if (authorOverlap < 0.25) {
+      score -= 10;
+    }
+  }
+
+  if (hasNonOriginalMarker(docTitleNorm)) {
+    score -= 20;
   }
 
   if (Array.isArray(doc?.isbn) && doc.isbn.length) {
@@ -72,9 +242,24 @@ function scoreDoc(doc, title, author) {
   return score;
 }
 
+function isEnglishDoc(doc) {
+  const languages = Array.isArray(doc?.language) ? doc.language : [];
+  for (const language of languages) {
+    const value = String(language || "").toLowerCase();
+    if (value === "eng" || value === "en" || value.includes("/languages/eng")) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function fetchOpenLibraryDocs(params) {
   if (!params.has("fields")) {
-    params.set("fields", "key,title,author_name,first_publish_year,isbn,ia");
+    params.set(
+      "fields",
+      "key,title,author_name,first_publish_year,isbn,ia,language",
+    );
   }
 
   const response = await fetch(
@@ -183,9 +368,42 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: "Open Library request failed" });
     }
 
-    const docs = candidateDocs
-      .map((doc) => ({ doc, score: scoreDoc(doc, title, author) }))
-      .sort((a, b) => b.score - a.score)
+    const uniqueCandidateDocs = dedupeCandidateDocs(candidateDocs);
+
+    const authorFilteredDocs = normalizedAuthor
+      ? uniqueCandidateDocs.filter((doc) =>
+          hasStrongAuthorMatch(doc, normalizedAuthor),
+        )
+      : uniqueCandidateDocs;
+
+    const titleFilteredDocs = normalizedTitle
+      ? authorFilteredDocs.filter((doc) =>
+          hasStrongTitleMatch(doc, normalizedTitle),
+        )
+      : authorFilteredDocs;
+
+    const docsForRanking = titleFilteredDocs.length
+      ? titleFilteredDocs
+      : authorFilteredDocs.length
+        ? authorFilteredDocs
+        : uniqueCandidateDocs;
+
+    const rankedDocs = docsForRanking
+      .map((doc) => ({
+        doc,
+        score: scoreDoc(doc, title, author),
+        english: isEnglishDoc(doc),
+      }))
+      .sort((a, b) => {
+        if (a.english !== b.english) {
+          return a.english ? -1 : 1;
+        }
+        return b.score - a.score;
+      });
+
+    const hasEnglishMatches = rankedDocs.some((entry) => entry.english);
+    const docs = rankedDocs
+      .filter((entry) => (hasEnglishMatches ? entry.english : true))
       .map((entry) => entry.doc);
 
     const unique = new Set();
