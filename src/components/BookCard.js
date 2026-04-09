@@ -12,6 +12,10 @@ import {
 import { formatDate } from "@/lib/book-utils";
 
 export function BookCard({ book }) {
+  const bookHref = book?.id
+    ? { pathname: "/book/[id]", query: { id: String(book.id) } }
+    : "/dashboard";
+
   return (
     <Card
       className="fade-up"
@@ -19,7 +23,7 @@ export function BookCard({ book }) {
     >
       <CardActionArea
         component={Link}
-        href={`/book/${book.id}`}
+        href={bookHref}
         sx={{
           display: "flex",
           flexDirection: "column",
@@ -31,7 +35,7 @@ export function BookCard({ book }) {
           sx={{
             position: "relative",
             width: "100%",
-            height: 170,
+            height: 152,
             borderBottom: "1px solid rgba(255,255,255,0.12)",
             bgcolor: "rgba(0,0,0,0.28)",
           }}
@@ -41,7 +45,7 @@ export function BookCard({ book }) {
             alt={book.title}
             fill
             sizes="(max-width: 768px) 50vw, 25vw"
-            style={{ objectFit: "contain", padding: 8 }}
+            style={{ objectFit: "contain", padding: 14 }}
             unoptimized
           />
         </Box>

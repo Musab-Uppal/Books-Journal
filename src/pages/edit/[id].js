@@ -36,7 +36,7 @@ export default function EditBookPage() {
       queryClient.invalidateQueries({ queryKey: ["books", user.id] });
       queryClient.invalidateQueries({ queryKey: ["book", id, user.id] });
       toast.success("Book updated");
-      router.push(`/book/${id}`);
+      router.push({ pathname: "/book/[id]", query: { id: String(id) } });
     },
     onError: (error) => {
       const message = error?.message || "Could not update book";

@@ -61,6 +61,8 @@ export function BookForm({
   const [lookupError, setLookupError] = useState("");
   const [lookupNotice, setLookupNotice] = useState("");
   const titleValue = watch("title");
+  const isbnValue = watch("isbn");
+  const hasIsbnValue = Boolean(String(isbnValue || "").trim());
 
   useEffect(() => {
     reset(defaults);
@@ -203,7 +205,9 @@ export function BookForm({
               label="ISBN"
               fullWidth
               size="small"
-              placeholder="Optional (auto-fill with Find ISBN)"
+              placeholder={
+                hasIsbnValue ? undefined : "Optional (auto-fill with Find ISBN)"
+              }
               {...register("isbn")}
               error={Boolean(errors.isbn)}
               helperText={

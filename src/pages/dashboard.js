@@ -79,7 +79,7 @@ function CurrentlyReadingCard({ books }) {
       </Typography>
       <Typography
         component={Link}
-        href={`/book/${featured.id}`}
+        href={{ pathname: "/book/[id]", query: { id: String(featured.id) } }}
         color="warning.main"
         sx={{ mt: 0.8, display: "inline-block", fontSize: 14 }}
       >
@@ -171,7 +171,7 @@ export default function DashboardPage() {
 
           <Grid container spacing={1.5}>
             {books.map((book) => (
-              <Grid key={book.id} size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid key={book.id} size={{ xs: 12, sm: 6, md: 3 }}>
                 <BookCard book={book} />
               </Grid>
             ))}

@@ -39,7 +39,7 @@ export function NoteEditor({ note, onUpdate, onDelete, loading }) {
         alignItems="center"
         sx={{ mb: 1 }}
       >
-        <Typography variant="subtitle1" sx={{ fontSize: 16 }}>
+        <Typography variant="subtitle1" sx={{ fontSize: 18, fontWeight: 600 }}>
           {note.title}
         </Typography>
         <Stack direction="row" spacing={0.5}>

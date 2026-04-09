@@ -13,6 +13,7 @@ import {
   CircularProgress,
   Divider,
   Grid,
+  IconButton,
   Paper,
   Stack,
   TextField,
@@ -35,12 +36,33 @@ import {
   updateNote,
 } from "@/lib/queries";
 
+function normalizeSummaryForDisplay(value) {
+  const text = String(value || "");
+
+  return text
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>|<\/div>|<\/h[1-6]>/gi, "\n")
+    .replace(/<li>/gi, "- ")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/^\s{0,3}#{1,6}\s*/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export default function BookDetailsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { id } = router.query;
+  const routeId = router.query?.id;
+  const id = Array.isArray(routeId) ? routeId[0] : routeId;
   const [detailsError, setDetailsError] = useState("");
+  const [summaryText, setSummaryText] = useState("");
+  const [summaryError, setSummaryError] = useState("");
 
   const bookQuery = useQuery({
     queryKey: ["book", id, user?.id],
@@ -116,8 +138,42 @@ export default function BookDetailsPage() {
     },
   });
 
+  const summarizeNotesMutation = useMutation({
+    mutationFn: async ({ bookTitle, notes }) => {
+      const response = await fetch("/api/groq-summarize-notes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          book: bookTitle,
+          author: "Unknown",
+          notes,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Could not summarize notes");
+      }
+
+      return payload;
+    },
+    onSuccess: (payload) => {
+      setSummaryError("");
+      setSummaryText(normalizeSummaryForDisplay(payload?.summary || ""));
+      toast.success("Notes summerized");
+    },
+    onError: (error) => {
+      const message = error?.message || "Could not summarize notes";
+      setSummaryError(message);
+      toast.error(message);
+    },
+  });
+
   const loading = bookQuery.isLoading || notesQuery.isLoading;
   const book = bookQuery.data;
+  const notes = notesQuery.data || [];
 
   return (
     <ProtectedPage>
@@ -139,29 +195,66 @@ export default function BookDetailsPage() {
               sx={{ p: { xs: 1.6, sm: 2 } }}
             >
               <Grid container spacing={1.5}>
-                <Grid size={{ xs: 12, md: 4 }}>
+                <Grid size={{ xs: 12, md: 3 }}>
                   <Box
                     sx={{
                       position: "relative",
                       width: "100%",
-                      minHeight: 200,
+                      maxWidth: { xs: 210, sm: 230, md: 200 },
+                      minHeight: { xs: 210, sm: 230 },
+                      aspectRatio: "2 / 3",
                       borderRadius: 2,
                       overflow: "hidden",
+                      bgcolor: "rgba(0,0,0,0.26)",
+                      mx: { xs: "auto", md: 0 },
                     }}
                   >
                     <Image
                       src={book.cover_url || "/next.svg"}
                       alt={book.title}
                       fill
+                      loading="eager"
                       sizes="(max-width: 768px) 100vw, 33vw"
-                      style={{ objectFit: "cover" }}
+                      style={{ objectFit: "contain", padding: 12 }}
                       unoptimized
                     />
                   </Box>
                 </Grid>
 
-                <Grid size={{ xs: 12, md: 8 }}>
+                <Grid size={{ xs: 12, md: 9 }}>
                   <Stack spacing={1.2}>
+                    <Stack
+                      direction="row"
+                      justifyContent="flex-end"
+                      spacing={0.5}
+                    >
+                      <IconButton
+                        component={Link}
+                        href={{
+                          pathname: "/edit/[id]",
+                          query: { id: String(book.id) },
+                        }}
+                        color="warning"
+                        size="small"
+                      >
+                        <EditRoundedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        color="error"
+                        size="small"
+                        onClick={() => {
+                          if (
+                            window.confirm("Delete this book and its notes?")
+                          ) {
+                            deleteBookMutation.mutate();
+                          }
+                        }}
+                        disabled={deleteBookMutation.isPending}
+                      >
+                        <DeleteRoundedIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
+
                     <Typography variant="h4">{book.title}</Typography>
                     <Typography color="text.secondary">
                       ISBN: {book.isbn}
@@ -176,33 +269,6 @@ export default function BookDetailsPage() {
                     {detailsError ? (
                       <Alert severity="error">{detailsError}</Alert>
                     ) : null}
-
-                    <Stack direction="row" spacing={1.2} sx={{ pt: 1 }}>
-                      <Button
-                        component={Link}
-                        href={`/edit/${book.id}`}
-                        variant="contained"
-                        color="warning"
-                        startIcon={<EditRoundedIcon />}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<DeleteRoundedIcon />}
-                        onClick={() => {
-                          if (
-                            window.confirm("Delete this book and its notes?")
-                          ) {
-                            deleteBookMutation.mutate();
-                          }
-                        }}
-                        disabled={deleteBookMutation.isPending}
-                      >
-                        Delete
-                      </Button>
-                    </Stack>
                   </Stack>
                 </Grid>
               </Grid>
@@ -210,7 +276,61 @@ export default function BookDetailsPage() {
 
             <Paper className="glass-card" sx={{ p: { xs: 1.6, sm: 2 } }}>
               <Stack spacing={1.4}>
-                <Typography variant="h5">Notes</Typography>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "stretch", sm: "center" }}
+                  spacing={1}
+                >
+                  <Typography variant="h5">Notes</Typography>
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    onClick={() => {
+                      setSummaryError("");
+                      summarizeNotesMutation.mutate({
+                        bookTitle: book.title,
+                        notes,
+                      });
+                    }}
+                    disabled={summarizeNotesMutation.isPending || !notes.length}
+                    sx={{ alignSelf: { xs: "flex-start", sm: "auto" } }}
+                  >
+                    {summarizeNotesMutation.isPending
+                      ? "Summerizing..."
+                      : "Summerize Notes"}
+                  </Button>
+                </Stack>
+
+                {summaryError ? (
+                  <Alert severity="error">{summaryError}</Alert>
+                ) : null}
+
+                {summaryText ? (
+                  <Paper
+                    variant="outlined"
+                    sx={{ p: 1.25, borderColor: "rgba(255,255,255,0.18)" }}
+                  >
+                    <Stack spacing={0.6}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        Summary
+                      </Typography>
+                      <Stack spacing={0.8}>
+                        {summaryText.split(/\n\n+/).map((paragraph, index) => (
+                          <Typography
+                            key={`${index}-${paragraph.slice(0, 12)}`}
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ whiteSpace: "pre-wrap" }}
+                          >
+                            {paragraph}
+                          </Typography>
+                        ))}
+                      </Stack>
+                    </Stack>
+                  </Paper>
+                ) : null}
+
                 <Box
                   component="form"
                   onSubmit={addForm.handleSubmit((values) =>
@@ -247,7 +367,7 @@ export default function BookDetailsPage() {
                 <Divider />
 
                 <Stack spacing={1.25}>
-                  {(notesQuery.data || []).map((note) => (
+                  {notes.map((note) => (
                     <NoteEditor
                       key={note.id}
                       note={note}
@@ -281,7 +401,7 @@ export default function BookDetailsPage() {
                     />
                   ))}
 
-                  {!notesQuery.isLoading && !(notesQuery.data || []).length ? (
+                  {!notesQuery.isLoading && !notes.length ? (
                     <Typography color="text.secondary">
                       No notes yet.
                     </Typography>

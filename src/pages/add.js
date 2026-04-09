@@ -31,7 +31,7 @@ export default function AddBookPage() {
     onSuccess: (book) => {
       queryClient.invalidateQueries({ queryKey: ["books", user.id] });
       toast.success("Book added");
-      router.push(`/book/${book.id}`);
+      router.push({ pathname: "/book/[id]", query: { id: String(book.id) } });
     },
     onError: (error) => {
       const message = error?.message || "Could not add book";
